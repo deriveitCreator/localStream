@@ -1,0 +1,30 @@
+<!Doctype html>
+<html style="background-color: black;">
+  <head>
+    <script>
+      window.onload = ()=>{
+        navigator.mediaDevices
+        .getUserMedia({video: true})
+        .then((mediaStream) => {
+          const video = document.getElementById("VIDEO_ID");
+          video.srcObject = mediaStream;
+          video.onloadedmetadata = () => {
+            document.getElementById("resolutionText").innerHTML = `Camera Resolution: ${video.videoWidth}w x ${video.videoHeight}h`;
+            video.play();
+          };
+        })
+        .catch((err) => { document.getElementById("resolutionText").innerHTML = `${err.name}: ${err.message}`; });
+      }
+      window.onbeforeunload = ()=>{
+        const xhttp = new XMLHttpRequest();
+        xhttp.open("POST", "/deleteId", true);
+        xhttp.send("id=VIDEO_ID");
+      };
+    </script>
+  </head>
+  <body style="color:darkturquoise;">
+    <video controls id="VIDEO_ID"></video>
+    <p id="resolutionText"></p>
+    <a href="/">Exit</a>
+  </body>
+</html>
