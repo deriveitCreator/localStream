@@ -1,6 +1,61 @@
 <!Doctype html>
 <html style="background-color: black;">
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script>
+      var ws;
+      var videoId;
+      var videoEl;
+      var image = new Image();
+      const FR_INT = Math.ceil(1000/12);
+      const offscreenCanvas = document.createElement("canvas");
+      var offscreenCtx;
+      
+      window.onload = ()=>{
+        videoId = window.location.search.split("=")[1];
+        videoEl = document.getElementById('main_video');
+        videoEl.srcObject = offscreenCanvas.captureStream(12);
+        ws = new WebSocket(`wss://${window.location.hostname}:${window.location.port}/getImageData`);
+        ws.onmessage = onMesFunc;
+        ws.onopen = sendVideoId;
+      }
+
+      function sendVideoId() {
+        window.setTimeout(()=>ws.send(videoId), FR_INT);
+      }
+
+      function onMesFunc(event){
+        let res = JSON.parse(event.data);
+
+        offscreenCtx = offscreenCanvas.getContext("2d");
+
+        let newW = Math.ceil(decodeURIComponent(res["width"]));
+        let newH = Math.ceil(decodeURIComponent(res["height"]));
+        if(offscreenCanvas.width != newW) offscreenCanvas.width = newW;
+        if(offscreenCanvas.height != newH) offscreenCanvas.height = newH;   
+        image.src = decodeURIComponent(res["imageData"]);  
+        requestAnimationFrame(sendVideoId); 
+      }
+
+      image.onload = ()=>{
+        offscreenCtx.clearRect(0, 0, offscreenCanvas.width, offscreenCanvas.height);
+        offscreenCtx.drawImage(image,0,0);   
+      };
+
+    </script>
+    <style>
+      #video_canvas{
+        image-rendering: optimizeSpeed;
+        image-rendering: -moz-crisp-edges;
+        image-rendering: -webkit-optimize-contrast;
+        image-rendering: optimize-contrast;
+        -ms-interpolation-mode: nearest-neighbor;
+      }
+    </style>
+  </head>
   <body style="color:darkturquoise;">
-    <p>Watch stream</p>
+    <video controls id="main_video"></video>
+    <a href="/">Exit</a>
   </body>
 </html>
+

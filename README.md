@@ -1,9 +1,12 @@
 # localStream
 Record on one device and show it on another (locally).
 
-This project is not secure.
+<u>How to use:</u> In the terminal, first run `createCert.bat`, then run `npm run start`. 
 
 ## Updates
+
+update 2.0:
+- The project works well, but can be improved.
 
 update 1.0:
 - First commit.

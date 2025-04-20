@@ -1,6 +1,6 @@
 {
   "name": "localstream",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "A project that allows you to stream in one device and display on another (locally).",
   "homepage": "https://github.com/deriveitCreator/localStream#readme",
   "bugs": {
@@ -20,7 +20,9 @@
   },
   "devDependencies": {
     "@types/node": "^22.13.17",
+    "@types/ws": "^8.18.1",
     "tsx": "^4.19.3",
-    "typescript": "^5.8.2"
+    "typescript": "^5.8.2",
+    "ws": "^8.18.1"
   }
 }
