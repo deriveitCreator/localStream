@@ -5,6 +5,9 @@ Record on one device and show it on another (locally).
 
 ## Updates
 
+update 2.1:
+- Added `onbeforeunload` event in `startStream.html` and `watchStream.html` to close the websocket.
+
 update 2.0:
 - The project works well, but can be improved.
 

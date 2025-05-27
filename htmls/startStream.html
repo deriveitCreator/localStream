@@ -14,6 +14,10 @@
         ws = new WebSocket(`wss://${window.location.hostname}:${window.location.port}/setImageData`);
         ws.onopen = startStream;
       };
+      
+      window.onbeforeunload = ()=>{
+        if (ws) ws.close();
+      }
 
       function startStream(){
         navigator.mediaDevices
