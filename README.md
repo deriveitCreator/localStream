@@ -1,9 +1,18 @@
 # localStream
+
+![Flask](https://img.shields.io/badge/Flask-blue?style=for-the-badge&logo=Flask&logoColor=white&color=blue) ![WebRTC](https://img.shields.io/badge/WebRTC-white?style=for-the-badge&logo=WebRTC&logoColor=red&color=white)
+
 Record on one device and show it on another (locally).
 
-<u>How to use:</u> In the terminal, first run `createCert.bat`, then run `npm run start`. 
+## How to use 
+
+- Run `python server.py`.
 
 ## Updates
+
+update 3.0:
+- Whole project is rebuilt.
+- The backend now uses flask instead on Node.js.
 
 update 2.1:
 - Added `onbeforeunload` event in `startStream.html` and `watchStream.html` to close the websocket.

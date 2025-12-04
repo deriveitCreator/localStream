@@ -1,3 +1,4 @@
-
-/node_modules
+__pycache__
+*.kra
+*.kra~
 /certificate_files

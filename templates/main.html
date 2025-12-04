@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <title>LAN Streaming</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="format-detection" content="telephone=no">
+  <meta content="charset=utf-8">
+  <link rel="stylesheet" type="text/css" href="./static/main.css">
+  <link rel="icon" type="image/x-icon" href="./static/favicon.ico">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js" integrity="sha512-q/dWJ3kcmjBLU4Qc47E4A9kTB4m3wuTY7vkFJDTZKjTs8jhyGQnaUrxa0Ytd0ssMZhbNua9hE+E7Qv1j+DyZwA==" crossorigin="anonymous"></script>
+</head>
+<body>
+  <header>
+    <h1>LAN Streaming</h1>
+    <small>{{ clientId }}</small>
+  </header>
+  <main>
+    <div id="mainButtonsContainer">
+      <button type="button" onclick="watchStream()">
+        <img src="./static/watch.png" alt="Watch stream"/>
+        <span>Watch Stream</span>
+      </button>
+      <button type="button" onclick="startStream()">
+        <img src="./static/stream.png" alt="Start stream"/>
+        <span>Start Stream</span>
+      </button>
+    </div>
+    <div id="videoContainer">
+      <select id="selectCamera" title="select camera" onchange="setStream()"></select>
+      <input id="watchStreamIdInput" label="watchStreamIdInput" title="Input the Id of the stream" placeholder="Streamer Id" onkeyup="checkWatchStreamId()"/>
+      <video autoplay playsinline muted></video>
+      <div id="videoButtonsContainer">
+        <button type="button" onclick="pausePlayVideo()" title="pause/play video (Space)"><img src="./static/pausePlay.png" alt="pause or play"/></button>
+        <button type="button" id="stopStreaming" onclick="stopStreamingOrWatching()" title="stop streaming (Esc)">Stop Streaming</button>
+        <button type="button" id="stopWatching" onclick="stopStreamingOrWatching()" title="stop Watching (Esc)">Stop Wacthing</button>
+        <button type="button" onclick="flipVideo()" title="flip video (F)"><img src="./static/flip.png" alt="flip"/></button>
+      </div>
+    </div>
+  </main>
+  <footer>
+    <a target="_blank" href="https://github.com/deriveitCreator/localStream">
+      <img src="./static/github_logo.png" alt="github"/>
+    </a>
+    <a target="_blank" href="https://ko-fi.com/deriveitcreator">
+      <img src="./static/donate_logo.png" alt="donate"/>
+    </a>
+  </footer>
+  <script>
+    var g_clientId;
+    var g_socket;
+    var g_videoContainer;
+    var g_selectCameraEl = document.getElementById("selectCamera");
+    var g_videoEl;
+    var g_stream;
+    var g_mode = 0; //1 = streaming; 2 = watching; 0 = none
+    var g_audienceConnection = {};
+    var g_startedStreamOnce = false;
+    var g_watchStreamIdInput;
+    var g_watchStreamInputWaitTime = 2000;
+    var g_watchStreamDelayFunc;
+    var g_streamerConnection;
+
+    window.onload = () => {
+      g_clientId = document.querySelector("small").textContent;
+      setSocket();
+      g_videoContainer = document.getElementById("videoContainer");
+      g_videoEl = document.querySelector("#videoContainer video");
+      g_selectCameraEl = document.getElementById("selectCamera");
+      g_watchStreamIdInput = document.getElementById("watchStreamIdInput");
+      g_videoEl.onloadedmetadata = () => g_videoEl.play();
+      window.onkeyup = e => {
+        if (!(g_videoContainer.classList.contains("showStream"))) return;
+        if(e.key === "f") flipVideo();
+        else if(e.key === "p") pausePlayVideo();
+        else if(e.key === "Escape") stopStreaming();
+      };
+    }
+
+    function setSocket() {
+      g_socket = io();
+      g_socket.on('isStreamer', data => {
+        const inputVal = g_watchStreamIdInput.value; //needed to check if id input is still same
+        if ((data["streamerId"] === inputVal) && (data["streamerExists"])) {
+          console.log(`${inputVal} is a streamer.`);
+          g_socket.emit('askForOffer', {"streamerId": inputVal, "watcherId": g_clientId});
+        }
+      });
+      g_socket.on('askingForOffer', async data => {
+        let newPC = new RTCPeerConnection({iceServers: []});
+        newPC.addTrack(g_stream.getTracks()[0], g_stream);
+        const offer = await newPC.createOffer();
+        await newPC.setLocalDescription(offer);
+        g_audienceConnection[data["watcherId"]] = newPC;
+        newPC.onicecandidate = ({candidate}) => {
+          if (candidate) {
+            g_socket.emit('sendIceCandidate', {
+              "fromStreamer": true,
+              "candidate": candidate,
+              "senderId": g_clientId,
+              "targetId": data["watcherId"]
+            });
+          }
+        };
+        console.log("Sending offer to " + data["watcherId"]);
+        g_socket.emit('sendOffer', {
+          "streamerId": g_clientId, 
+          "watcherId": data["watcherId"], 
+          "offer": offer
+        });
+      });
+      g_socket.on('gotOffer', async data => {
+        const inputVal = g_watchStreamIdInput.value; //needed to check if id input is still same
+        if(inputVal !== data["streamerId"]) return;
+        const remoteStream = new MediaStream();
+        g_videoEl.srcObject = remoteStream;
+        g_streamerConnection = new RTCPeerConnection({iceServers: []});
+        g_streamerConnection.ontrack = (event) => remoteStream.addTrack(event.track);
+        await g_streamerConnection.setRemoteDescription(new RTCSessionDescription(data["offer"]));
+        const answer = await g_streamerConnection.createAnswer();
+        await g_streamerConnection.setLocalDescription(answer);
+        g_streamerConnection.onicecandidate = ({candidate}) => {
+          if (candidate) {
+            g_socket.emit('sendIceCandidate', {
+              "fromStreamer": false,
+              "candidate": candidate,
+              "senderId": g_clientId,
+              "targetId": data["streamerId"]
+            });
+          }
+        };
+        g_socket.emit('sendAnswer', {
+          "streamerId": inputVal, 
+          "watcherId": g_clientId, 
+          "answer": answer
+        });
+      });
+      g_socket.on('gotAnswer', async data => {
+        console.log("Got answer from " + data["watcherId"]);
+        const remoteDesc = new RTCSessionDescription(data["answer"]);
+        await g_audienceConnection[data["watcherId"]].setRemoteDescription(remoteDesc);
+      });
+      g_socket.on("gotIceCandidate", async data => {
+        const candidate = new RTCIceCandidate(data["candidate"]);
+        if (data["fromStreamer"]) await g_streamerConnection.addIceCandidate(candidate);
+        else await g_audienceConnection[data["senderId"]].addIceCandidate(candidate);
+      });
+      g_socket.on("streamerPing", () => {
+        if (g_mode === 1) g_socket.emit("streamerPong", {"id": g_clientId});
+      });
+      g_socket.on("watcherPing", ()=> {
+        if (g_mode === 2) g_socket.emit("watcherPong", {"id": g_clientId});
+      });
+    }
+
+    async function startStream() {
+      if (!g_startedStreamOnce) {
+        await setSelectCameraEl();
+        navigator.mediaDevices.addEventListener('devicechange', setSelectCameraEl);
+        g_startedStreamOnce = true;
+      }
+      else setStream();
+      g_videoContainer.classList.remove("watchStreamMode");
+      g_videoContainer.classList.add("setStreamMode");
+      g_videoContainer.classList.add("showStream");
+    }
+
+    async function setSelectCameraEl() {
+      g_selectCameraEl.innerHTML = null;
+      try{
+        let devices = await navigator.mediaDevices.enumerateDevices();
+        devices.forEach((device) => {
+          if(device.kind === "videoinput") {
+            let optionEl = document.createElement("option");
+            optionEl.textContent = device.label;
+            optionEl.setAttribute("data-id", device.deviceId)
+            g_selectCameraEl.appendChild(optionEl);
+          }
+        });
+        setStream();
+      }
+      catch (err) {
+        console.error(err);
+        alert('Cannot enumerate devices.\nPlease report this!');
+        window.location.reload();
+      }
+    }
+
+    function setStream() {
+      let curSelectedCameraId = g_selectCameraEl.selectedOptions[0].getAttribute("data-id");
+      navigator.mediaDevices.getUserMedia({
+        video: {"deviceId": curSelectedCameraId}, 
+        audio: false
+      })
+      .then((stream) => {
+        g_stream = stream;
+        g_videoEl.srcObject = stream;
+        if(g_mode === 1) Object.values(g_audienceConnection).forEach(async pc => {
+          pc.getSenders()[0].replaceTrack(g_stream.getVideoTracks()[0])
+        })
+        else {
+          g_mode = 1;
+          g_socket.emit('addStreamer', {"streamerId": g_clientId});
+        }
+      })
+      .catch((err) => {
+        console.error(err);
+        alert('Error accessing media devices.\nPleaase report this!');
+        window.location.reload();
+      });
+    }
+
+    function watchStream(){
+      g_mode = 2;
+      g_videoContainer.classList.remove("setStreamMode");
+      g_videoContainer.classList.add("watchStreamMode");
+      g_videoContainer.classList.add("showStream");
+    }
+
+    function checkWatchStreamId() {
+      if (g_watchStreamDelayFunc) window.clearInterval(g_watchStreamDelayFunc);
+      g_watchStreamDelayFunc = window.setTimeout(()=>{
+        g_socket.emit('isStreamer', {"streamerId": g_watchStreamIdInput.value});
+      }, g_watchStreamInputWaitTime);
+    }
+
+    function stopStreamingOrWatching(){
+      if (g_stream) g_stream.getTracks().forEach(track => track.stop());
+      g_videoContainer.classList.remove("showStream");
+      g_socket.emit('removeStreamerOrWatcher', {"clientId": g_clientId});
+      g_mode = 0;
+    }
+
+    function pausePlayVideo(){
+      if(g_videoEl.paused) g_videoEl.play();
+      else g_videoEl.pause();
+    }
+
+    function flipVideo(){
+      if (g_videoEl.classList.contains("flipped")) g_videoEl.classList.remove("flipped");
+      else g_videoEl.classList.add("flipped");
+    }
+  </script>
+</body>
+</html>
